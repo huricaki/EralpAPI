@@ -21,6 +21,7 @@ namespace EralpAPI
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();
+
                 });
     }
 }

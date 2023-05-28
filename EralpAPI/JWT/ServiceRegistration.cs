@@ -12,43 +12,43 @@ namespace EralpAPI.JWT
 {
     public static class ServiceRegistration
     {
-        public static IServiceCollection InstallAuthentication(this IServiceCollection services, IConfiguration configuration)
-        {
-            #region JWT
+        //public static IServiceCollection InstallAuthentication(this IServiceCollection services, IConfiguration configuration)
+        //{
+        //    #region JWT
 
-            var jwtOption = new JwtSettings();
-            configuration.GetSection(nameof(JwtSettings)).Bind(jwtOption);
-            services.AddSingleton(jwtOption);
+        //    var jwtOption = new JwtSettings();
+        //    configuration.GetSection(nameof(JwtSettings)).Bind(jwtOption);
+        //    services.AddSingleton(jwtOption);
 
-            var tokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidIssuer = jwtOption.Issuer,
-                ValidAudience = jwtOption.Audience,
-                RequireExpirationTime = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOption.Secret)),
-                ValidateIssuerSigningKey = true,
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero
-            };
+        //    var tokenValidationParameters = new TokenValidationParameters
+        //    {
+        //        ValidateIssuer = true,
+        //        ValidateAudience = true,
+        //        ValidIssuer = jwtOption.Issuer,
+        //        ValidAudience = jwtOption.Audience,
+        //        RequireExpirationTime = true,
+        //        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOption.Secret)),
+        //        ValidateIssuerSigningKey = true,
+        //        ValidateLifetime = true,
+        //        ClockSkew = TimeSpan.Zero
+        //    };
 
-            services.AddSingleton(tokenValidationParameters);
+        //    services.AddSingleton(tokenValidationParameters);
 
-            #endregion
+        //    #endregion
 
-            services.AddAuthentication(auth =>
-            {
-                auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                auth.DefaultSignInScheme = JwtBearerDefaults.AuthenticationScheme;
-            }).AddJwtBearer(options =>
-            {
-                options.SaveToken = true;
-                options.TokenValidationParameters = tokenValidationParameters;
-            });
+        //    services.AddAuthentication(auth =>
+        //    {
+        //        auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        //        auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        //        auth.DefaultSignInScheme = JwtBearerDefaults.AuthenticationScheme;
+        //    }).AddJwtBearer(options =>
+        //    {
+        //        options.SaveToken = true;
+        //        options.TokenValidationParameters = tokenValidationParameters;
+        //    });
 
-            return services;
-        }
+        //    return services;
+        //}
     }
 }

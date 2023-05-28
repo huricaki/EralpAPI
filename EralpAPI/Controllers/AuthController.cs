@@ -1,9 +1,12 @@
-﻿using DataAccessLayer.Context;
+﻿using DataAccessLayer.Abstract;
+using DataAccessLayer.Context;
 using EntityLayer.Entities;
+using EralpAPI.Helper;
 using EralpAPI.JWT;
 using EralpAPI.Models.Auth;
 using EralpAPI.Statics;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System;
@@ -16,57 +19,27 @@ using System.Threading.Tasks;
 
 namespace EralpAPI.Controllers
 {
-    [AllowAnonymous]
+    [ApiController]
+    [Authorize]
     [Route("[controller]")]
     public class AuthController : Controller
     {
         public AppDbContext Context { get; set; }
         public JwtSettings JwtSettings { get; set; }
-
-        public AuthController(AppDbContext context, JwtSettings jwtSettings)
+        private readonly IGenericRepository<User> _repository;
+        public AuthController(AppDbContext context, IGenericRepository<User> repository)
         {
             this.Context = context;
-            this.JwtSettings = jwtSettings;
+            this._repository = repository;
         }
 
-        [HttpPost]
-        public IActionResult GetProducts(int currentPage, int pageSize, string productName)
-        {
-            // Pagination
-
-            var queryable = Context.Products.AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(productName))
-            {
-                queryable = queryable.Where(x => x.Name.Contains(productName));
-            }
-
-            var response = queryable
-                .OrderByDescending(x => x.Id)
-                .Skip((currentPage - 1) * pageSize)
-                .Take(pageSize)
-                .ToList();
-
-
-            return Ok();
-        }
-
+        [AllowAnonymous]
         [HttpPost]
         [Route("Login")]
         public IActionResult Login(string userName, string password)
         {
             try
             {
-                //if (!string.IsNullOrWhiteSpace(userName))
-                //{
-                //    // adina gore filtre
-                //}
-                ////user bilgilerini getirme\\
-                //Context.Products
-                //    .OrderByDescending(x => x.Id)
-                //    .Skip(5)
-                //    .Take(5);
-
                 var getUserDetails = Context.Set<User>().FirstOrDefault(x => x.UserName.ToLower() == userName);
 
                 if (getUserDetails == null)
@@ -78,18 +51,16 @@ namespace EralpAPI.Controllers
                 {
                     return StatusCode(500, "invalid password");
                 }
-
-                SymmetricSecurityKey symmetricSecurityKey = new(Encoding.UTF8.GetBytes(JwtSettings.Secret));
-
+                var tokenHandler = new JwtSecurityTokenHandler();
+                
+                var secretKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(ConfigurationManager.AppSetting["JWT:Secret"]));
                 JwtSecurityToken jwtSecurityToken = new(
                     claims: GenerateClaims(getUserDetails),
-                    issuer: JwtSettings.Issuer,
-                    audience: JwtSettings.Audience,
-                    expires: DateTime.Now.AddMinutes(JwtSettings.TokenLifeTime.TotalMinutes),
-                    signingCredentials: new SigningCredentials(symmetricSecurityKey, SecurityAlgorithms.HmacSha256)
+                    issuer: ConfigurationManager.AppSetting["JWT:ValidIssuer"],
+                    audience: ConfigurationManager.AppSetting["JWT:ValidAudience"],
+                    expires: DateTime.Now.AddMinutes(6),
+                    signingCredentials: new SigningCredentials(secretKey, SecurityAlgorithms.HmacSha256)
                 );
-
-                JwtSecurityTokenHandler tokenHandler = new();
 
                 var tokenAsStr = tokenHandler.WriteToken(jwtSecurityToken);
 
@@ -97,7 +68,7 @@ namespace EralpAPI.Controllers
                 {
                     UserId = getUserDetails.Id,
                     UserName = getUserDetails.UserName,
-                    UserToken = tokenAsStr
+                    UserToken = tokenAsStr.ToString()
                 };
 
                 return Ok(dto);
@@ -106,31 +77,89 @@ namespace EralpAPI.Controllers
             {
                 return StatusCode(500, "internal server error!");
             }
-           
+
+        } //Authanticate 
+
+        [AllowAnonymous]
+        [HttpPost]
+        [Route("Register")]
+        public async Task<IActionResult> AddUser([FromBody] UserDto userDto) // add user
+        {
+            try
+            {
+                User user = new User{
+                    UserName = userDto.UserName,
+                    Email = userDto.Email,
+                    Password = userDto.Password
+                };
+
+                await _repository.Add(user);
+                return Ok();
+            }
+            catch (System.Exception)
+            {
+                return StatusCode(500, "Internal Server Error");
+            }
+        }
+
+        [Route("UpdateUser/{id}")]
+        [HttpPut]
+        public async Task<IActionResult> UpdateUser(long id, [FromBody] UserDto userDto)
+       {
+            try
+            {
+                User user = new User
+                {
+                    UserName = userDto.UserName,
+                    Email = userDto.Email,
+                    Password = userDto.Password,
+                    Id=id
+                };
+
+                var existingProduct = await _repository.Update(id, user);
+
+                if (existingProduct == null)
+                {
+                    return NotFound();
+                }
+                return Ok(existingProduct);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Internal Server Error");
+            }
         }
 
         [HttpGet]
         [Route("GetMyDetails")]
         [Authorize]
-        public IActionResult GetMyDetails(long id)
+        public async Task<IActionResult> GetMyDetails(long id) //get my user detail
         {
             try
             {
-                return Ok();
+                var getMyDetail = await _repository.GetById(id);
+                return Ok(getMyDetail);
             }
-            catch (System.Exception)
+            catch (System.Exception ex)
             {
                 return StatusCode(500, "internal server error!");
             }
         }
 
-        private static Claim[] GenerateClaims(User user)
+        private static IEnumerable<Claim> GenerateClaims(User user)
         {
-            return new[]
-            {
-                new Claim(UserClaimsType.Id, user.Id.ToString()),
-                new Claim(UserClaimsType.UserName, user.UserName),
-            };
+            var claims = new List<Claim>();
+
+            // Diğer kullanıcı kimlik bilgilerini claims koleksiyonuna ekle
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
+            claims.Add(new Claim(ClaimTypes.Name, user.UserName.ToString()));
+
+            return claims;
+            //    new[]
+            //{
+            //    new Claim(UserClaimsType.Id, user.Id.ToString()),
+            //    new Claim(UserClaimsType.UserName, user.UserName),
+            //};
         }
     }
 }
